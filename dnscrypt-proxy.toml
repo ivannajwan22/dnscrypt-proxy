@@ -141,7 +141,7 @@ server_names = ['odoh-cloudflare', 'cloudflare', 'cloudflare-ipv6', 'dnscry.pt-j
 [sources]
   [sources.'public-resolvers']
   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
-  cache_file = '/dnscrypt-proxy/cache/public-resolvers.md'
+  cache_file = '/dnscrypt_proxy/cache/public-resolvers.md'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   refresh_delay = 73
   prefix = ''
@@ -152,7 +152,7 @@ server_names = ['odoh-cloudflare', 'cloudflare', 'cloudflare-ipv6', 'dnscry.pt-j
 ### `dnscrypt-proxy.toml` configuration file:
   [sources.'opennic']
   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/opennic.md', 'https://download.dnscrypt.info/resolvers-list/v3/opennic.md']
-  cache_file = '/dnscrypt-proxy/cache/opennic.md'
+  cache_file = '/dnscrypt_proxy/cache/opennic.md'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   refresh_delay = 72
   prefix = 'opennic-'
@@ -160,7 +160,7 @@ server_names = ['odoh-cloudflare', 'cloudflare', 'cloudflare-ipv6', 'dnscry.pt-j
 ### dnscry.pt servers - See https://www.dnscry.pt
   [sources.dnscry-pt-resolvers]
   url = 'https://www.dnscry.pt/resolvers.md'
-  cache_file = "/dnscrypt-proxy/cache/dnscry.pt-resolvers.md"
+  cache_file = "/dnscrypt_proxy/cache/dnscry.pt-resolvers.md"
   minisign_key = "RWQM31Nwkqh01x88SvrBL8djp1NH56Rb4mKLHz16K7qsXgEomnDv6ziQ"
   refresh_delay = 73
   prefix = "dnscry.pt-"
@@ -168,7 +168,7 @@ server_names = ['odoh-cloudflare', 'cloudflare', 'cloudflare-ipv6', 'dnscry.pt-j
 ### Anonymized DNS relays ####
   [sources.'relays']
   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/relays.md']
-  cache_file = '/dnscrypt-proxy/cache/relays.md'
+  cache_file = '/dnscrypt_proxy/cache/relays.md'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   refresh_delay = 73
   prefix = ''
@@ -176,7 +176,7 @@ server_names = ['odoh-cloudflare', 'cloudflare', 'cloudflare-ipv6', 'dnscry.pt-j
   [sources.dnscry-pt-anon-relays]
   urls = ["https://www.dnscry.pt/anon-relays.md"]
   minisign_key = "RWQM31Nwkqh01x88SvrBL8djp1NH56Rb4mKLHz16K7qsXgEomnDv6ziQ"
-  cache_file = "/dnscrypt-proxy/cache/dnscry.pt-anon-relays.md"
+  cache_file = "/dnscrypt_proxy/cache/dnscry.pt-anon-relays.md"
   refresh_delay = 73
   prefix = "dnscry.pt-"
 
@@ -195,18 +195,18 @@ routes = [
   [sources.'odoh-servers']
   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-servers.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-servers.md']
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-  cache_file = '/dnscrypt-proxy/cache/odoh-servers.md'
+  cache_file = '/dnscrypt_proxy/cache/odoh-servers.md'
   refresh_delay = 73
   prefix = ''
   [sources.'odoh-relays']
   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-relays.md']
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-  cache_file = '/dnscrypt-proxy/cache/odoh-relays.md'
+  cache_file = '/dnscrypt_proxy/cache/odoh-relays.md'
   refresh_delay = 73
   prefix = ''
 
 [query_log]
-#  file = '/dnscrypt-proxy/log/query.log'
+#  file = '/dnscrypt_proxy/log/query.log'
 
 [nx_log]
-#  file = '/dnscrypt-proxy/log/nx.log'
+#  file = '/dnscrypt_proxy/log/nx.log'
