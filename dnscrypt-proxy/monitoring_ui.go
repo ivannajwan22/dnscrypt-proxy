@@ -7,6 +7,7 @@ import (
 	"html"
 	"net"
 	"net/http"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -16,25 +17,6 @@ import (
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 )
-
-// sanitizeString - Sanitizes user input to prevent XSS attacks
-func sanitizeString(input string) string {
-	// HTML escape to prevent XSS
-	escaped := html.EscapeString(input)
-	// Additional validation for domain names - only allow valid domain characters
-	if strings.Contains(input, ".") { // Likely a domain name
-		// Remove any non-domain characters
-		var result strings.Builder
-		for _, r := range escaped {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-				(r >= '0' && r <= '9') || r == '.' || r == '-' || r == '_' {
-				result.WriteRune(r)
-			}
-		}
-		return result.String()
-	}
-	return escaped
-}
 
 // MonitoringUIConfig - Configuration for the monitoring UI
 type MonitoringUIConfig struct {
@@ -264,7 +246,7 @@ func (ui *MonitoringUI) Stop() error {
 }
 
 // UpdateMetrics - Updates metrics with a new query
-func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, start time.Time) {
+func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	if !ui.config.Enabled {
 		return
 	}
@@ -324,7 +306,13 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 	}
 
 	// Update response time - back to counters lock
-	responseTime := time.Since(start).Milliseconds()
+	responseTime := time.Since(pluginsState.requestStart).Milliseconds()
+
+	// Cap at timeout to handle system sleep/suspend
+	maxResponseTime := pluginsState.timeout.Milliseconds()
+	if responseTime > maxResponseTime {
+		responseTime = maxResponseTime
+	}
 	mc.countersMutex.Lock()
 	mc.responseTimeSum += uint64(responseTime)
 	mc.responseTimeCount++
@@ -347,10 +335,11 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 
 	// Update top domains - separate lock
 	if mc.privacyLevel < 2 {
-		sanitizedDomain := sanitizeString(pluginsState.qName)
+		// Store domain name directly - no sanitization needed for internal metrics
+		domainName := pluginsState.qName
 		mc.domainMutex.Lock()
-		mc.topDomains[sanitizedDomain]++
-		dlog.Debugf("Domain %s, count: %d", sanitizedDomain, mc.topDomains[sanitizedDomain])
+		mc.topDomains[domainName]++
+		dlog.Debugf("Domain %s, count: %d", domainName, mc.topDomains[domainName])
 		mc.domainMutex.Unlock()
 	}
 
@@ -397,13 +386,14 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 		}
 
 		entry := QueryLogEntry{
-			Timestamp:    now,
-			ClientIP:     clientIP,
-			Domain:       sanitizeString(pluginsState.qName),
-			Type:         sanitizeString(qType),
-			ResponseCode: sanitizeString(returnCode),
+			Timestamp: now,
+			ClientIP:  clientIP,
+			// HTML escape only the fields that will be displayed in web UI
+			Domain:       html.EscapeString(pluginsState.qName),
+			Type:         qType,      // DNS types are safe, no escaping needed
+			ResponseCode: returnCode, // DNS response codes are safe, no escaping needed
 			ResponseTime: responseTime,
-			Server:       sanitizeString(pluginsState.serverName),
+			Server:       html.EscapeString(pluginsState.serverName),
 			CacheHit:     pluginsState.cacheHit,
 		}
 
@@ -473,6 +463,10 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	var result strings.Builder
 
 	// Write help and type information for each metric
+	result.WriteString("# HELP dnscrypt_proxy_build_info A metric with a constant '1' value labeled by version, goversion from which dnscrypt_proxy was built, and the goos and goarch for the build.\n")
+	result.WriteString("# TYPE dnscrypt_proxy_build_info gauge\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_build_info{goarch=\"%s\" goos=\"%s\" goversion=\"%s\" version=\"%s\"} 1\n", runtime.GOARCH, runtime.GOOS, runtime.Version(), AppVersion))
+
 	result.WriteString("# HELP dnscrypt_proxy_queries_total Total number of DNS queries processed\n")
 	result.WriteString("# TYPE dnscrypt_proxy_queries_total counter\n")
 	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_total %d\n", totalQueries))
@@ -510,8 +504,9 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	result.WriteString("# HELP dnscrypt_proxy_server_queries_total Total queries per server\n")
 	result.WriteString("# TYPE dnscrypt_proxy_server_queries_total counter\n")
 	for server, count := range mc.serverQueryCount {
-		sanitizedServer := sanitizeString(server)
-		result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_queries_total{server=\"%s\"} %d\n", sanitizedServer, count))
+		// For Prometheus labels, escape quotes and backslashes to prevent label injection
+		escapedServer := strings.ReplaceAll(strings.ReplaceAll(server, "\\", "\\\\"), "\"", "\\\"")
+		result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_queries_total{server=\"%s\"} %d\n", escapedServer, count))
 	}
 
 	result.WriteString("# HELP dnscrypt_proxy_server_response_time_average_ms Average response time per server in milliseconds\n")
@@ -519,8 +514,9 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	for server, count := range mc.serverQueryCount {
 		if count > 0 {
 			avgTime := float64(mc.serverResponseTime[server]) / float64(count)
-			sanitizedServer := sanitizeString(server)
-			result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_response_time_average_ms{server=\"%s\"} %.2f\n", sanitizedServer, avgTime))
+			// For Prometheus labels, escape quotes and backslashes to prevent label injection
+			escapedServer := strings.ReplaceAll(strings.ReplaceAll(server, "\\", "\\\\"), "\"", "\\\"")
+			result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_response_time_average_ms{server=\"%s\"} %.2f\n", escapedServer, avgTime))
 		}
 	}
 	mc.serverMutex.RUnlock()
@@ -530,8 +526,8 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	result.WriteString("# HELP dnscrypt_proxy_query_type_total Total queries per DNS record type\n")
 	result.WriteString("# TYPE dnscrypt_proxy_query_type_total counter\n")
 	for qtype, count := range mc.queryTypes {
-		sanitizedQtype := sanitizeString(qtype)
-		result.WriteString(fmt.Sprintf("dnscrypt_proxy_query_type_total{type=\"%s\"} %d\n", sanitizedQtype, count))
+		// DNS query types are safe alphanumeric values, no escaping needed
+		result.WriteString(fmt.Sprintf("dnscrypt_proxy_query_type_total{type=\"%s\"} %d\n", qtype, count))
 	}
 	mc.queryTypesMutex.RUnlock()
 
@@ -671,7 +667,7 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		count := 0
 		for _, dc := range domainCounts {
 			topDomainsList = append(topDomainsList, map[string]interface{}{
-				"domain": sanitizeString(dc.domain),
+				"domain": html.EscapeString(dc.domain),
 				"count":  dc.count,
 			})
 			count++
@@ -782,16 +778,18 @@ func (ui *MonitoringUI) handleTestQuery(w http.ResponseWriter, r *http.Request) 
 	msg.SetQuestion("test.example.com.", dns.TypeA)
 
 	// Create a fake plugin state
+	testStart := time.Now().Add(-10 * time.Millisecond)
 	pluginsState := PluginsState{
-		qName:       "test.example.com",
-		serverName:  "cloudflare",
-		clientProto: "udp",
-		questionMsg: msg,
-		cacheHit:    false,
+		qName:        "test.example.com",
+		serverName:   "cloudflare",
+		clientProto:  "udp",
+		questionMsg:  msg,
+		cacheHit:     false,
+		requestStart: testStart,
 	}
 
 	// Update metrics
-	ui.UpdateMetrics(pluginsState, msg, time.Now().Add(-10*time.Millisecond))
+	ui.UpdateMetrics(pluginsState, msg)
 
 	// Return success
 	w.Header().Set("Content-Type", "text/plain")
@@ -1107,6 +1105,7 @@ func (ui *MonitoringUI) broadcastMetrics() {
 	defer ui.clientsMutex.Unlock()
 
 	for client := range ui.clients {
+		client.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		err := client.WriteJSON(metrics)
 		if err != nil {
 			dlog.Debugf("WebSocket write error: %v", err)
